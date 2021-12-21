@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Post It!</title>
+    <!-- Import Google Icon Font -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+
+    <!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/css/materialize.min.css">
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.0/js/materialize.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/7.16.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.16.1/firebase-messaging.js"></script>
+    <style type="text/css">
+        #alert,
+        #info,
+        #delete,
+        #notification,
+        #message_row {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<nav class="light-blue lighten-1" role="navigation">
+    <div class="nav-wrapper container">
+        <h3 class="brand-logo">Post It Notes</h3>
+        <ul class="right hide-on-med-and-down desktop-header-links">
+<!--            <li><a href="https://github.com/cyberskeleton">GitHub</a></li>-->
+        </ul>
+    </div>
+</nav>
+<main class="section no-pad-bot" id="index-banner">
+    <div class="container">
+        <br>
+        <br>
+        <div class="card-panel deep-orange darken-1 white-text z-depth-2" id="alert">
+            <i class="material-icons left deep-orange-text text-darken-4">warning</i>
+            <strong>Error</strong>
+            <em id="alert-message"></em>
+        </div>
+        <div class="card-panel green darken-1 white-text z-depth-2" id="info">
+            <i class="material-icons left green-text text-darken-4">info</i>
+            <span id="info-message"></span>
+        </div>
+        <div class="row center">
+            <h4 class="header col s12 light">Instance ID Token</h4>
+            <p id="token" style="word-break: break-all;"></p>
+        </div>
+
+        <div id="msg"></div>
+        <div id="notis"></div>
+        <div id="err"></div>
+        <div class="row center">
+            <button type="button" class="btn-large waves-effect waves-light orange" id="register"><i class="material-icons left">vpn_key</i> Register</button>
+        </div>
+
+        <div class="input-field col s12">
+            <label for="title">Notification title</label>
+            <input type="text" name="title" id="title" value="Alert" class="validate">
+        </div>
+        <div class="input-field col s12">
+            <label for="body">Notification message</label>
+            <input type="text" name="body" id="body" value="You have an appointment assigned" class="validate">
+        </div>
+        <div class="col s12">
+            <label for="datetime">Notification date and time</label>
+            <input type="datetime-local" name="datetime" id="datetime" class="validate">
+        </div>
+        <div class="row center">
+            <button type="button" class="btn-large waves-effect waves-light orange" id="add-alarm"><i class="material-icons left">alarm_add</i> Add Alarm</button>
+        </div>
+        <div class="input-field col s12" id="message_row">
+            <p><strong>Message id:</strong> <span id="message_id" style="word-break: break-all;"></span></p>
+        </div>
+
+    </div>
+</main>
+</body>
+</html>
+
+
+<script>
+    firebase.initializeApp({
+        apiKey: "AIzaSyCumzLjSQJ-izhVU-GuBvgEONuuBvdkLNU",
+        authDomain: "post-it-notes-program.firebaseapp.com",
+        projectId: "post-it-notes-program",
+        storageBucket: "post-it-notes-program.appspot.com",
+        messagingSenderId: "449485541524",
+        appId: "1:449485541524:web:92674f84e716a18b24a481",
+        measurementId: "G-15X65GEQL3"
+    });
+    const messaging = firebase.messaging();
+    messaging.usePublicVapidKey('BC9qo4ij7LpJF76vsHYJWRjpjvK-IOfL2o_I9cRNJjKxRtD4_UH-DaOZ5WmBaajisn96rF1v0r6oZUXF7DqQJCs');
+    // register service worker
+    navigator.serviceWorker.register('firebase-messaging-sw.js');
+
+    var bt_register = $('#register');
+    var bt_add = $('#add-alarm');
+    tokenElem = document.getElementById("token");
+
+    var deviceToken;
+
+    // already granted
+    if (Notification.permission === 'granted') {
+        getToken();
+    }
+
+    // get permission on subscribe only once
+    bt_register.on('click', function() {
+        getToken();
+    });
+
+    function getToken() {
+        // permission to receive push messages
+        return messaging.requestPermission()
+            .then(function () {
+                console.log("Notification permission granted.");
+
+                return messaging.getToken()
+            })
+            .then(function(token) {
+                // print the token on the HTML page
+                tokenElem.innerHTML = "Device token is : <br>" + token
+                deviceToken = token;
+            })
+            .catch(function (err) {
+                console.log("Error occurred.", err);
+            });
+    }
+
+    bt_add.on('click', function () {
+        var titleValue = document.getElementById("title").value;
+        var bodyValue = document.getElementById("body").value;
+        var datetimeValue = new Date(document.getElementById("datetime").value).toISOString();
+
+        const options = {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                subject: titleValue,
+                content: bodyValue,
+                data: null,
+                time: datetimeValue,
+                token: deviceToken
+            })
+        };
+        console.log("request: ", options.toString())
+        fetch('/api/v1/notes/add', options);
+    });
+
+    // register ServiceWorker every time
+    navigator.serviceWorker.register('messaging-sw.js');
+    messaging.onMessage(function(payload) {
+
+        console.log('Message received. ', payload);
+
+        // ask for permission on showing notes
+        Notification.requestPermission(function(result) {
+            if (result === 'granted') {
+                navigator.serviceWorker.ready.then(function(registration) {
+                    // now we can show the message
+                    return registration.showNotification(payload.notification.title, payload.notification);
+                }).catch(function(error) {
+                    console.log('ServiceWorker registration failed', error);
+                });
+            }
+        });
+    });
+</script>
